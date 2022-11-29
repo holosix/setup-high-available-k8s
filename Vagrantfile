@@ -112,9 +112,8 @@ backend apiserver
     mode tcp
     option ssl-hello-chk
     balance     roundrobin
-        server k8s-master01 192.168.0.101:6443 check
-        server k8s-master02 192.168.0.102:6443 check
-        server k8s-master03 192.168.0.103:6443 check
+        server k8s-master01 192.168.10.101:6443 check
+        server k8s-master02 192.168.10.102:6443 check
 EOF
 
 sudo systemctl enable --now haproxy
@@ -134,7 +133,7 @@ Vagrant.configure("2") do |config|
                 v.name = "k8s-master01"
                 v.customize ["modifyvm", :id, "--memory", "4096", "--cpus", "2"]
         end
-        master01.vm.network :private_network, ip: "192.168.0.101"
+        master01.vm.network :private_network, ip: "192.168.10.101"
         master01.vm.hostname = "k8s-master01"
         master01.vm.provision :hostmanager
         master01.vm.provision :shell, :inline => $install_haproxy
@@ -151,7 +150,7 @@ Vagrant.configure("2") do |config|
             v.name = "k8s-master02"
             v.customize ["modifyvm", :id, "--memory", "4096", "--cpus", "2"]
           end
-          master02.vm.network :private_network, ip: "192.168.0.102"
+          master02.vm.network :private_network, ip: "192.168.10.102"
           master02.vm.hostname = "k8s-master02"
           master02.vm.provision :hostmanager
           master02.vm.provision :shell, :inline => $install_utilities
@@ -165,7 +164,7 @@ Vagrant.configure("2") do |config|
             v.name = "k8s-node01"
             v.customize ["modifyvm", :id, "--memory", "4096", "--cpus", "2"]
           end
-          node01.vm.network :private_network, ip: "192.168.0.104"
+          node01.vm.network :private_network, ip: "192.168.10.104"
           node01.vm.hostname = "k8s-node01"
           node01.vm.provision :hostmanager
           node01.vm.provision :shell, :inline => $install_utilities
