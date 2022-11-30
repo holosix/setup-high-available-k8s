@@ -15,6 +15,51 @@ sudo yum install docker-ce docker-ce-cli containerd.io -y
 sudo systemctl enable --now docker
 SCRIPT
 
+$install_crio = <<SCRIPT
+#!/bin/bash
+VERSION=1.25
+sudo curl -L -o /etc/yum.repos.d/devel:kubic:libcontainers:stable.repo https://download.opensuse.org/repositories/devel:kubic:libcontainers:stable/CentOS_7/devel:kubic:libcontainers:stable.repo
+sudo curl -L -o /etc/yum.repos.d/devel:kubic:libcontainers:stable:cri-o:${VERSION}.repo https://download.opensuse.org/repositories/devel:kubic:libcontainers:stable:cri-o:${VERSION}/CentOS_7/devel:kubic:libcontainers:stable:cri-o:${VERSION}.repo
+sudo yum install cri-o cri-tools -y
+sudo systemctl enable --now crio
+SCRIPT
+
+$install_config = <<SCRIPT
+#!/bin/bash
+systemctl disable firewalld --now
+## letting ipTables see bridged networks
+cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf
+br_netfilter
+EOF
+cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+EOF
+sudo sysctl --system
+##
+## iptables config as specified by CRI-O documentation
+# Create the .conf file to load the modules at bootup
+cat <<EOF | sudo tee /etc/modules-load.d/crio.conf
+overlay
+br_netfilter
+EOF
+sudo modprobe overlay
+sudo modprobe br_netfilter
+# Set up required sysctl params, these persist across reboots.
+cat <<EOF | sudo tee /etc/sysctl.d/99-kubernetes-cri.conf
+net.bridge.bridge-nf-call-iptables  = 1
+net.ipv4.ip_forward                 = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+EOF
+sudo sysctl --system
+### Disable swap
+swapoff -a
+##make a backup of fstab
+cp -f /etc/fstab /etc/fstab.bak
+##Renove swap from fstab
+sed -i '/swap/d' /etc/fstab
+SCRIPT
+
 $install_k8s = <<SCRIPT
 #!/bin/bash
 cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
@@ -140,9 +185,11 @@ Vagrant.configure("2") do |config|
         master01.vm.provision :file, :source => "calico.yaml", :destination => "calico.yaml"
 
         master01.vm.provision :shell, :inline => $install_utilities
-        master01.vm.provision :shell, :inline => $install_docker
+        # master01.vm.provision :shell, :inline => $install_docker
+        master01.vm.provision :shell, :inline => $install_crio
         master01.vm.provision :file, :source => "kubernetes.repo", :destination => "kubernetes.repo"
         master01.vm.provision :shell, :inline => $install_k8s
+        master01.vm.provision :shell, :inline => $install_config
         end
 
         config.vm.define :master02 do |master02|
@@ -154,7 +201,8 @@ Vagrant.configure("2") do |config|
           master02.vm.hostname = "k8s-master02"
           master02.vm.provision :hostmanager
           master02.vm.provision :shell, :inline => $install_utilities
-          master02.vm.provision :shell, :inline => $install_docker
+          # master02.vm.provision :shell, :inline => $install_docker
+          master02.vm.provision :shell, :inline => $install_crio
           master02.vm.provision :file, :source => "kubernetes.repo", :destination => "kubernetes.repo"
           master02.vm.provision :shell, :inline => $install_k8s
         end
@@ -168,7 +216,8 @@ Vagrant.configure("2") do |config|
           node01.vm.hostname = "k8s-node01"
           node01.vm.provision :hostmanager
           node01.vm.provision :shell, :inline => $install_utilities
-          node01.vm.provision :shell, :inline => $install_docker
+          # node01.vm.provision :shell, :inline => $install_docker
+          node01.vm.provision :shell, :inline => $install_crio
           node01.vm.provision :file, :source => "kubernetes.repo", :destination => "kubernetes.repo"
           node01.vm.provision :shell, :inline => $install_k8s
         end
